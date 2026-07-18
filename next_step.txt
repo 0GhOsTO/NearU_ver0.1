@@ -1,0 +1,259 @@
+NEXT STEPS
+
+===============================================================================
+PRODUCT BOUNDARY (decided 2026-07-13, re-affirmed 2026-07-14)
+===============================================================================
+
+NearU is discovery and coordination only.
+
+Do not build a wallet, checkout, payout flow, connected account flow, card
+processor, payment webhook, escrow, platform fee, top-up, send-funds flow, or any
+feature that requires users to pay through NearU.
+
+Build verticals as:
+- listings/posts
+- browse/search
+- profiles and trust
+- reports/blocks
+- reviews
+- messages and realtime coordination
+- notifications
+
+The live `profiles` table still has dormant legacy columns named
+`wallet_balance`, `stripe_account_id`, and `stripe_customer_id`. They exist only
+because they are already in the database schema. Do not select them, display them,
+write them, or build from them.
+
+Marketplace `listings.price_cents` is a displayed listing field only. It is not a
+NearU transaction, collection, verification, or enforcement mechanism.
+
+===============================================================================
+CURRENT VERIFIED STATE
+===============================================================================
+
+Verified against live Supabase on 2026-07-17:
+- Public tables with RLS: profiles, profiles_public, allowed_email_domains,
+  user_blocks, user_reports, listings, conversations, messages.
+- Row counts: profiles 2, profiles_public 2, listings 0, conversations 0,
+  messages 0, allowed_email_domains 0.
+- Realtime: supabase_realtime publication includes public.messages.
+- Storage: one bucket, avatars.
+- Edge Functions: none.
+- Extensions: PostGIS installed in extensions.
+- Security Advisor: leaked password protection disabled (WARN); the SECURITY
+  DEFINER messaging RPCs are authenticated-executable by design.
+- No payment-related backend service or Edge Function exists.
+
+Verified on disk:
+- No app/(app)/pay route exists.
+- No components/pay directory exists.
+- No src/lib/stripe.ts exists.
+- BottomNav links Feed, Gigs, Market, Messages, Profile.
+- Marketplace detail uses Message Seller, not checkout.
+
+===============================================================================
+COMPLETED
+===============================================================================
+
+1. Authenticated routing.
+   - Next.js 16 Proxy lives at frontend/src/proxy.ts.
+   - Route gating and session refresh live in frontend/src/lib/supabase/middleware.ts.
+   - Unauthenticated app-route users are redirected to /login.
+   - Signed-in users are redirected away from /login and /signup.
+   - Non-onboarded signed-in users are redirected to /onboarding.
+
+2. Server-side Supabase support.
+   - @supabase/ssr installed.
+   - Browser/server clients and config live in frontend/src/lib/supabase/.
+
+3. Supabase generated types.
+   - frontend/src/types/database.ts reflects the live schema.
+   - frontend/src/types/index.ts contains app-level types.
+
+4. Onboarding persistence.
+   - Saves display name, bio, school, DOB, gender, avatar URL, exact coordinate,
+     and is_onboarded.
+   - Uses set_profile_onboarding() RPC.
+   - Refreshes session after writing onboarding metadata.
+   - Exact location stays in profiles.general_coordinate.
+   - Approximate public location is exposed through profiles_public.
+
+5. Allowed domains from Supabase.
+   - Signup fetches allowed_email_domains.
+   - Onboarding fetches schools through getSchools().
+   - Local hardcoded arrays are no longer the app source of truth.
+   - Live table is currently empty and must be seeded before real signup tests.
+
+6. Signup interim flow.
+   - Email confirmation is currently disabled.
+   - Signup routes directly to /onboarding because Supabase returns a session.
+   - /verify-email exists but is not the default signup path until email
+     confirmation and SMTP are configured.
+
+7. Profile reads and edits.
+   - useUser reads the signed-in user's own profiles row with explicit columns.
+   - /profile fetches own profile server-side and renders ProfileForm.
+   - updateProfile() writes display_name, bio, and profile_photo_url.
+   - /profile/[userId] reads profiles_public only.
+   - My Listings on /profile is real.
+   - Reviews remain mock.
+
+8. Avatar Storage.
+   - avatars bucket exists.
+   - Public read, owner-scoped write.
+   - 2 MiB limit, jpeg/png/webp.
+   - AvatarUpload uploads to `${uid}/${uuid}.${ext}` and returns public URL.
+   - Browser E2E upload still needs manual confirmation.
+
+9. Marketplace.
+   - public.listings table exists with RLS.
+   - Browse, detail, create, and own listings use real Supabase data.
+   - Seller identity is read through profiles_public, not private profiles embed.
+   - createListing() validates data, takes seller_id from session, and revalidates
+     /marketplace.
+   - Listing image upload is not built.
+   - Edit/delete listing UI is not built.
+   - Browser E2E create -> browse -> detail still needs manual confirmation.
+
+10. Payment surfaces removed.
+   - Deleted app/(app)/pay.
+   - Deleted components/pay.
+   - Removed Pay tab from BottomNav.
+   - Removed /pay from protectedRoutePrefixes.
+   - Replaced marketplace detail checkout language with Message Seller.
+   - Replaced landing-page payment claims with messaging/meeting copy.
+   - Removed app-level Transaction type.
+   - Dormant legacy DB columns are not selected by app code except generated types.
+
+11. Messaging (done 2026-07-17).
+   - 1:1 DM model: public.conversations (canonical user_a<user_b pair) + public.messages.
+   - RLS: participants read; sender-pinned participant insert; messages immutable.
+   - RPCs: start_conversation (resolves /messages/[userId], blocks self + user_blocks),
+     mark_conversation_read, list_my_conversations (inbox + unread), and the
+     is_conversation_participant RLS helper. anon EXECUTE revoked.
+   - Realtime Postgres Changes enabled on public.messages (durable table is source of
+     truth; realtime is only live push).
+   - Server Actions in app/(app)/messages/actions.ts; useMessages hook replaces the
+     useRealtime stub; optimistic send with dedupe.
+   - UI: messages/page.tsx (server) + ConversationListClient; messages/[userId]/page.tsx
+     (server) + ChatRoom. Reuses existing MessageBubble/ChatInput/ConversationList.
+   - Note: gigs/[id] still links to placeholder /messages/poster (gigs is mock, item 12).
+
+===============================================================================
+INCOMPLETE / NEXT WORK
+===============================================================================
+
+11-followup. Messaging polish (core is done, item 11 above).
+   Deferred on purpose from the first build; do later.
+
+   a. Presence and delivery signals.
+      - Typing indicators, read receipts, and online/last-seen presence.
+      - Use Realtime Presence / Broadcast channels, not the messages table.
+
+   b. Load-older history in the chat UI.
+      - getMessages(conversationId, before) already supports paging; ChatRoom only
+        loads the latest 30. Add a scroll-to-top "load older" control.
+
+   c. Send-time block enforcement.
+      - Blocks are checked only at start_conversation. A block created AFTER a
+        conversation exists does not stop further messages.
+      - Add a block check on message insert (RLS predicate or in sendMessage) if
+        that behavior is wanted.
+
+   d. Fix gigs/[id] message link.
+      - gigs/[id]/page.tsx still links to placeholder /messages/poster.
+      - Point it at the real poster's profile id when Gigs becomes real (item 12).
+
+   e. Two-account browser E2E.
+      - Verified at DB + build level; still run the live two-session test:
+        marketplace detail -> Message Seller, and public profile -> Send Message.
+      - Confirm live delivery without refresh, history persists on reload, and the
+        inbox unread badge bumps then clears on open.
+
+   f. Scale path (only if volume grows).
+      - Switch messages from Realtime Postgres Changes to Broadcast-from-Database
+        triggers if concurrent load gets high. Not needed now.
+
+   g. Conversation management (optional product calls).
+      - Delete/leave/archive a conversation, mute, and message search.
+      - Report/block entry points from inside the chat header.
+
+2. CAPTCHA on verify-email.
+   - /login and /signup have Turnstile.
+   - /verify-email does not render Turnstile.
+   - verifyOtp() and auth.resend() do not pass captchaToken.
+
+2.5 Real email verification.
+   - Required before launch because allowed-domain signup alone does not prove
+     inbox ownership while email confirmation is disabled.
+   - Enable email confirmation in Supabase Auth.
+   - Configure custom SMTP.
+   - Route signup to /verify-email?email=... after confirmation is enabled.
+   - Finish CAPTCHA on verify/resend.
+   - Test with a real inbox.
+
+12. Replace remaining mocks.
+   - Feed.
+   - Gigs.
+   - Borrow/lend.
+   - SafeDrop.
+   - Group ride.
+   - Hangout.
+   - Notifications.
+   - Profile reviews.
+   - Replace alert() placeholder submits with real states and backend actions.
+
+13. Supabase hardening / setup.
+   - Seed allowed_email_domains.
+   - Enable leaked password protection.
+   - Re-run Security Advisor and Performance Advisor after each schema change.
+   - Decide whether to add self-block and duplicate-report constraints.
+
+14. Known bugs found by audit.
+
+14a. HIGH: login ignores ?next=.
+   - Proxy redirects protected deep links to /login?next=<path>.
+   - Login currently hardcodes window.location.href = '/feed'.
+   - Fix by validating a relative next path and routing there after login.
+
+14b. MEDIUM: Button href branch ignores disabled/loading semantics.
+   - Link buttons get disabled styling but remain clickable/focusable.
+   - Fix with aria-disabled, pointer-events-none, tabIndex=-1, or render a span.
+
+14c. MEDIUM: updateProfile() does not revalidate.
+   - Profile save can appear stale after navigation.
+   - Add revalidatePath('/profile') and likely the public profile path.
+
+14d. LOW: AvatarUpload can orphan files.
+   - Upload happens on file select; DB URL is saved only when profile form saves.
+   - Later cleanup should remove unreferenced objects.
+
+14e. LOW: @tailwindcss/postcss@^4 is installed while the project uses Tailwind v3.
+   - It is currently inert because postcss.config.mjs uses the Tailwind v3 plugin.
+   - Remove it or intentionally migrate later.
+
+14f. SOURCE CLEANUP: leftover payment-era source text.
+   - Completed 2026-07-14 for mock notifications, unfinished gig/SafeDrop/ride
+     mock UI, and create_listings migration comments.
+
+15. Documentation cleanup.
+   - 2026-07-14 pass updated all Markdown docs to the no-platform-payment product
+     boundary and current Supabase state.
+   - Keep docs current whenever a mock area becomes real.
+
+===============================================================================
+VERIFICATION TO RUN AFTER CODE CHANGES
+===============================================================================
+
+From frontend/:
+- npm run lint
+- npm run build
+
+Manual checks:
+- signup -> onboarding -> feed
+- login
+- protected route redirect
+- profile edit
+- avatar upload
+- marketplace create -> browse -> detail
+- public profile -> message entry point

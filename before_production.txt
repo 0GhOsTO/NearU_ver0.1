@@ -1,0 +1,25 @@
+BEFORE GOING TO PRODUCTION
+==========================
+
+CAPTCHA (Cloudflare Turnstile)
+-------------------------------
+
+1. Get a real Cloudflare Turnstile site
+   - Go to https://dash.cloudflare.com -> Turnstile -> Add Site
+   - Copy your real Sitekey and Secret Key
+
+2. Update your production environment variable
+   - NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-real-sitekey>
+   - (Currently set to Cloudflare's always-pass test key: 1x00000000000000000000AA)
+
+3. Enable CAPTCHA in Supabase dashboard
+   - Dashboard -> Project -> Auth -> Bot and Abuse Protection
+   - Toggle "Enable CAPTCHA protection" -> select Turnstile
+   - Paste your real Secret Key -> Save
+
+⚠️  ORDER MATTERS
+   Deploy the frontend with the real sitekey FIRST,
+   then enable CAPTCHA in Supabase.
+
+   If you enable Supabase CAPTCHA before the frontend is live
+   with a real sitekey, all users will be locked out immediately.
