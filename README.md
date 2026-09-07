@@ -2,6 +2,7 @@
 
 > [!NOTE]
 > **This is a public, read-only copy of the NearU repository for portfolio and showcase purposes.** Active development continues in a separate private repository. This copy may not reflect the latest changes.
+> **Currently, the entire repo is under review line by line for deployment. Therefore, any additional changes will be made only after the review is complete. Converting .jsx to .tsx for scale**
 
 NearU is a hyperlocal campus and community application designed for verified neighbors (e.g., students and university community members) to discover nearby listings, request and offer micro-help, coordinate package handoffs, share rides, and message each other in real-time. 
 
