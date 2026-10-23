@@ -1,6 +1,7 @@
 # NearU 📍
 
-**Currently, the entire repo is under review line by line for deployment. Therefore, any additional changes will be made only after the review is complete. Converting .jsx to .tsx for scale**
+**Currently, the entire repo is under review line by line for deployment. Therefore, any additional changes will be made only after the review is complete. Converting .jsx to .tsx for scale.**
+
 Finished understanding the high-level overview of what is actually going on. Plan to deploy and go live around early next year. 
 > [!NOTE]
 > **This is a public, read-only copy of the NearU repository for portfolio and showcase purposes.** Active development continues in a separate private repository. This copy may not reflect the latest changes.
